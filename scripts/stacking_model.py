@@ -35,7 +35,7 @@ base_models = [
     ('lgb', LGBMClassifier(n_estimators=100, random_state=42))
 ]
 
-# Stacking 모델 구성
+# Stacking 모델 정의
 stack_model = StackingClassifier(
     estimators=base_models,
     final_estimator=LogisticRegression(),
@@ -50,37 +50,38 @@ stack_model.fit(X_train, y_train)
 val_pred = stack_model.predict(X_val)
 val_prob = stack_model.predict_proba(X_val)[:, 1]
 
-val_results = {
-    "Accuracy": accuracy_score(y_val, val_pred),
-    "F1": f1_score(y_val, val_pred),
-    "AUC": roc_auc_score(y_val, val_prob)
-}
-val_df = pd.DataFrame([val_results], index=["Stacking"])
-val_df["Mean"] = val_df.mean(axis=1)
+val_df = pd.DataFrame({
+    "Model": ["Stacking"],
+    "Accuracy": [accuracy_score(y_val, val_pred)],
+    "F1": [f1_score(y_val, val_pred)],
+    "AUC": [roc_auc_score(y_val, val_prob)]
+})
+val_df["Mean"] = val_df[["Accuracy", "F1", "AUC"]].mean(axis=1)
 
 print("Validation Performance:")
 print(val_df)
 
-# Cross Validation 평가
+# 교차검증 성능 평가
 cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 scoring = ["accuracy", "f1", "roc_auc"]
 
-cv_score = cross_validate(stack_model, X, y, cv=cv, scoring=scoring)
-cv_results = {
-    "CV_Accuracy": cv_score["test_accuracy"].mean(),
-    "CV_F1": cv_score["test_f1"].mean(),
-    "CV_AUC": cv_score["test_roc_auc"].mean()
-}
-cv_df = pd.DataFrame([cv_results], index=["Stacking"])
-cv_df["CV_Mean"] = cv_df.mean(axis=1)
+cv_scores = cross_validate(stack_model, X, y, cv=cv, scoring=scoring)
 
-print("Cross Validation Performance (5-fold):")
+cv_df = pd.DataFrame({
+    "Model": ["Stacking"],
+    "CV_Accuracy": [cv_scores["test_accuracy"].mean()],
+    "CV_F1": [cv_scores["test_f1"].mean()],
+    "CV_AUC": [cv_scores["test_roc_auc"].mean()]
+})
+cv_df["Mean"] = cv_df[["CV_Accuracy", "CV_F1", "CV_AUC"]].mean(axis=1)
+
+print("\nCross Validation Performance (5-fold):")
 print(cv_df)
 
 # 전체 학습셋으로 재학습
 stack_model.fit(X, y)
 
-# 테스트 예측
+# 테스트셋 예측
 y_prob = stack_model.predict_proba(X_test)[:, 1]
 y_pred = (y_prob >= 0.5).astype(int)
 
@@ -97,3 +98,11 @@ joblib.dump(stack_model, "../outputs/stacking_model.pkl")
 
 print("prediction_stack.csv 저장 완료")
 print("stacking_model.pkl 저장 완료")
+
+# --- 최종 요약 결과 출력 ---
+print("\n\n최종 요약 결과:")
+print("Validation Performance:")
+print(val_df)
+
+print("\nCross Validation Performance (5-fold):")
+print(cv_df)

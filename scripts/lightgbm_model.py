@@ -33,25 +33,33 @@ model.fit(X_train, y_train)
 val_pred = model.predict(X_val)
 val_prob = model.predict_proba(X_val)[:, 1]
 
-print("Validation Results:")
-print("Accuracy :", accuracy_score(y_val, val_pred))
-print("F1 Score :", f1_score(y_val, val_pred))
-print("AUC      :", roc_auc_score(y_val, val_prob))
+val_results = {
+    "Model": ["LightGBM"],
+    "Accuracy": [accuracy_score(y_val, val_pred)],
+    "F1": [f1_score(y_val, val_pred)],
+    "AUC": [roc_auc_score(y_val, val_prob)],
+}
+val_df = pd.DataFrame(val_results)
+val_df["Mean"] = val_df[["Accuracy", "F1", "AUC"]].mean(axis=1)
 
-# 교차검증 성능 평가 추가
+print("Validation Performance:")
+print(val_df)
+
+# 교차검증 성능 평가
 cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 scoring = ["accuracy", "f1", "roc_auc"]
 cv_scores = cross_validate(model, X, y, cv=cv, scoring=scoring)
 
-cv_results = {
-    "CV_Accuracy": cv_scores["test_accuracy"].mean(),
-    "CV_F1": cv_scores["test_f1"].mean(),
-    "CV_AUC": cv_scores["test_roc_auc"].mean()
-}
+cv_df = pd.DataFrame({
+    "Model": ["LightGBM"],
+    "CV_Accuracy": [cv_scores["test_accuracy"].mean()],
+    "CV_F1": [cv_scores["test_f1"].mean()],
+    "CV_AUC": [cv_scores["test_roc_auc"].mean()]
+})
+cv_df["Mean"] = cv_df[["CV_Accuracy", "CV_F1", "CV_AUC"]].mean(axis=1)
 
-print("\nCross-Validation Results (5-fold):")
-for metric, score in cv_results.items():
-    print(f"{metric} : {score:.4f}")
+print("\nCross Validation Performance (5-fold):")
+print(cv_df)
 
 # 전체 학습셋으로 재학습 (최종 모델)
 model.fit(X, y)
@@ -73,3 +81,11 @@ joblib.dump(model, "../outputs/lightgbm_model.pkl")
 
 print("prediction_lgb.csv 저장 완료")
 print("lightgbm_model.pkl 저장 완료")
+
+# --- 최종 요약 결과 출력 ---
+print("\n\n최종 요약 결과:")
+print("Validation Performance:")
+print(val_df)
+
+print("\nCross Validation Performance (5-fold):")
+print(cv_df)
