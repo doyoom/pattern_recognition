@@ -1,0 +1,19 @@
+- 결측치 10개 이상인 행들(총 299개)의 인덱스 정보가 담겨있는 파일입니다.
+
+```python
+# 1. 각 행별 결측치 개수 계산
+missing_counts = df.isnull().sum(axis=1)
+
+# 2. 결측치가 10개 이상인 행의 인덱스 추출
+idx_missing_over_10 = missing_counts[missing_counts >= 10].index.tolist()
+
+#3. 인덱스 저장
+pd.Series(idx_missing_over_10).to_csv('rows_to_drop.csv', index=False, header=False)
+```
+
+- 사용방법
+
+```python
+rows_to_drop = pd.read_csv('rows_to_drop.csv', header=None).squeeze().tolist()
+df_cleaned = df.drop(index=rows_to_drop)
+```
