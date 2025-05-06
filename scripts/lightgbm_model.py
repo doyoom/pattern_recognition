@@ -1,35 +1,75 @@
 import pandas as pd
 import numpy as np
 from lightgbm import LGBMClassifier
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_validate
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 import joblib
+import os
 
-# 학습/테스트 데이터 불러오기
+# 데이터 불러오기
 train = pd.read_csv("../data/final_train.csv")
 test = pd.read_csv("../data/final_test.csv")
-true_test = pd.read_csv("../data/test.csv")
+true_test = pd.read_csv("../data/test.csv")  # 교수님이 주신 원본 test 파일 (id 추출용)
 
-# 안전하게 id, y 컬럼 제거
-X_train = train.drop(columns=[col for col in ["id", "y"] if col in train.columns])
-y_train = train["y"]
-X_test = test.drop(columns=[col for col in ["id"] if col in test.columns])
+# id, y 제거
+drop_cols_train = [col for col in ["id", "y"] if col in train.columns]
+drop_cols_test = [col for col in ["id"] if col in test.columns]
 
-# 교수님 제공 test.csv 기준으로 id 사용
+X = train.drop(columns=drop_cols_train)
+y = train["y"]
+X_test = test.drop(columns=drop_cols_test)
 test_id = true_test["id"]
 
-# LightGBM 모델 학습 및 예측
+# 검증용 데이터셋 분리
+X_train, X_val, y_train, y_val = train_test_split(
+    X, y, test_size=0.3, stratify=y, random_state=42
+)
+
+# 모델 정의 및 학습
 model = LGBMClassifier(random_state=42)
 model.fit(X_train, y_train)
-y_prob = model.predict_proba(X_test)[:, 1]
-y_pred = (y_prob >= 0.5).astype(int)
 
-# 저장
+# 검증 성능 평가
+val_pred = model.predict(X_val)
+val_prob = model.predict_proba(X_val)[:, 1]
+
+print("Validation Results:")
+print("Accuracy :", accuracy_score(y_val, val_pred))
+print("F1 Score :", f1_score(y_val, val_pred))
+print("AUC      :", roc_auc_score(y_val, val_prob))
+
+# 교차검증 성능 평가 추가
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+scoring = ["accuracy", "f1", "roc_auc"]
+cv_scores = cross_validate(model, X, y, cv=cv, scoring=scoring)
+
+cv_results = {
+    "CV_Accuracy": cv_scores["test_accuracy"].mean(),
+    "CV_F1": cv_scores["test_f1"].mean(),
+    "CV_AUC": cv_scores["test_roc_auc"].mean()
+}
+
+print("\nCross-Validation Results (5-fold):")
+for metric, score in cv_results.items():
+    print(f"{metric} : {score:.4f}")
+
+# 전체 학습셋으로 재학습 (최종 모델)
+model.fit(X, y)
+
+# 테스트셋 예측
+y_test_prob = model.predict_proba(X_test)[:, 1]
+y_test_pred = (y_test_prob >= 0.5).astype(int)
+
+# 결과 저장
 submission = pd.DataFrame({
     "id": test_id,
-    "y_prob": y_prob,
-    "y_predict": y_pred
+    "y_prob": y_test_prob,
+    "y_predict": y_test_pred
 })
-submission.to_csv("../prediction_lgb.csv", index=False)
-joblib.dump(model, "../lightgbm_model.pkl")
+
+os.makedirs("../outputs", exist_ok=True)
+submission.to_csv("../outputs/prediction_lgb.csv", index=False)
+joblib.dump(model, "../outputs/lightgbm_model.pkl")
 
 print("prediction_lgb.csv 저장 완료")
 print("lightgbm_model.pkl 저장 완료")
