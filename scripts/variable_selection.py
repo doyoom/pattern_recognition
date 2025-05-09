@@ -19,23 +19,29 @@ def select_features(df: pd.DataFrame) -> list:
 
     df_numeric = df[numeric_cols]
 
-    vt = VarianceThreshold(threshold=0.001)
+    # 1. 분산 기준 완화
+    vt = VarianceThreshold(threshold=0.0005)  # 기존 0.001에서 완화
     vt.fit(df_numeric)
     low_var = df_numeric.columns[~vt.get_support()]
 
+    # 2. 상관계수 기준 완화
     corr = df_numeric.corr().abs()
     upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
-    high_corr = [c for c in upper.columns if any(upper[c] > 0.95)]
+    high_corr = [c for c in upper.columns if any(upper[c] > 0.98)]  # 기존 0.95에서 완화
 
+    # 3. VIF 기준 완화
     vif_vals = [variance_inflation_factor(df_numeric.values, i) for i in range(df_numeric.shape[1])]
-    vif_drop = df_numeric.columns[np.array(vif_vals) > 15]
+    vif_drop = df_numeric.columns[np.array(vif_vals) > 20]  # 기존 15에서 완화
 
-    custom_drop = {'kw_avg_min'}
-    drop_cols = set(low_var) | set(high_corr) | set(vif_drop) | custom_drop
+    # 4. 사용자 정의 변수 보호
+    protected_vars = {'kw_avg_min', 'global_sentiment_polarity'}
+    drop_cols = set(low_var) | set(high_corr) | set(vif_drop) - protected_vars
 
+    # 5. 최종 변수 리스트
     final_numeric = [c for c in numeric_cols if c not in drop_cols]
     final_cols = final_numeric + dummy_cols
     return final_cols
+
 
 if __name__ == "__main__":
     train_raw = pd.read_csv("data/train_encoded.csv")
