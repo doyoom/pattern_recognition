@@ -1,44 +1,35 @@
 import pandas as pd
 import numpy as np
 from lightgbm import LGBMClassifier
-import joblib  # 모델 저장용
+import joblib
 
-# 학습/테스트 데이터 불러오기
-train = pd.read_csv("../data/final_train.csv")
-test = pd.read_csv("../data/final_test.csv")
+def get_lightgbm_model(random_state: int = 42) -> LGBMClassifier:
+    """experiment 스크립트에서 호출할 LightGBM 모델"""
+    return LGBMClassifier(random_state=random_state)
 
-# 안전하게 id, y 컬럼 제거
-drop_cols_train = [col for col in ["id", "y"] if col in train.columns]
-drop_cols_test = [col for col in ["id"] if col in test.columns]
+if __name__ == "__main__":
+    train = pd.read_csv("../train_final_with_selection.csv")
+    test  = pd.read_csv("../zerofilled_test_selected.csv")
 
-X_train = train.drop(columns=drop_cols_train)
-y_train = train["y"]
-X_test = test.drop(columns=drop_cols_test)
+    drop_cols_train = [c for c in ("id", "y") if c in train.columns]
+    drop_cols_test  = [c for c in ("id",)      if c in test.columns]
 
-# id 컬럼이 없으면 0~n-1로 생성하고 이름 지정
-if "id" in test.columns:
-    test_id = test["id"]
-else:
-    test_id = pd.Series(np.arange(len(test)), name="id")
+    X_train = train.drop(columns=drop_cols_train)
+    y_train = train["y"]
+    X_test  = test.drop(columns=drop_cols_test)
 
-# LightGBM 모델 학습
-model = LGBMClassifier(random_state=42)
-model.fit(X_train, y_train)
+    test_id = test["id"] if "id" in test.columns else pd.Series(
+        np.arange(len(test)), name="id"
+    )
 
-# 예측
-y_prob = model.predict_proba(X_test)[:, 1]
-y_pred = (y_prob >= 0.5).astype(int)
+    model = get_lightgbm_model()
+    model.fit(X_train, y_train)
 
-# 결과 저장
-submission = pd.DataFrame({
-    "id": test_id,
-    "y_prob": y_prob,
-    "y_predict": y_pred
-})
-submission.to_csv("../prediction_lgb.csv", index=False)
+    y_prob = model.predict_proba(X_test)[:, 1]
+    y_pred = (y_prob >= 0.5).astype(int)
 
-# 모델 저장
-joblib.dump(model, "../lightgbm_model.pkl")
+    pd.DataFrame({"id": test_id, "y_prob": y_prob, "y_predict": y_pred}) \
+        .to_csv("../prediction_lgb.csv", index=False)
+    joblib.dump(model, "../lightgbm_model.pkl")
 
-print("prediction_lgb.csv 저장 완료")
-print("lightgbm_model.pkl 저장 완료")
+    print("prediction_lgb.csv, lightgbm_model.pkl 저장 완료")
